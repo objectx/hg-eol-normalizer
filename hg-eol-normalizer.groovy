@@ -6,11 +6,25 @@ def mercurial = "hg.exe"
 
 def files = [mercurial, "files"].execute ()
 
+/**
+ * Returns true when the file F is a conversion target
+ *
+ * @param  f filename to check
+ * @return   true if F is target
+ */
 @CompileStatic
 boolean is_target (String f) {
     (f ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+)$/)
 }
 
+/**
+ * Converts input \r\n sequence to \r.
+ *
+ * @param  input The input bytes
+ * @return       Converted byte stream
+ *
+ * Note: We can't use File.eachLine method in this case (eachLine is encoding sensitive)
+ */
 @CompileStatic
 ByteArrayOutputStream eliminate_CRLF (byte [] input) {
     ByteArrayOutputStream output = new ByteArrayOutputStream ()
@@ -46,7 +60,11 @@ ByteArrayOutputStream eliminate_CRLF (byte [] input) {
     output
 }
 
-
+/**
+ * Normalizes EOL (to unix one)
+ *
+ * @param  path file to check
+ */
 @CompileStatic
 def normalize_eol (Path path) {
     UUID uuid = UUID.randomUUID ()
