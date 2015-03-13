@@ -1,10 +1,55 @@
 import groovy.transform.CompileStatic
+import groovy.transform.Field
 import java.nio.file.*
 import java.util.UUID.*
 
-def mercurial = "hg.exe"
+def build_option_parser () {
+    def scriptname = (new File (getClass().protectionDomain.codeSource.location.file)).name
+    def cli = new CliBuilder (usage: "${scriptname} [options] [<repository>...]", stopAtNonOption: false)
+    cli.with {
+        H (longOpt: 'help', "Show this.")
+        v (longOpt: 'verbose', "Be verbose.")
+        N (longOpt: 'dry-run', "Don't modify anything.")
+    }
+    cli
+}
 
-def files = [mercurial, "files"].execute ()
+@Field boolean verbose = false
+@Field boolean dryrun = false
+
+def cli = build_option_parser ()
+
+def options = cli.parse args
+
+if (! options) {
+    System.exit 1
+}
+
+if (options.'help') {
+    cli.usage ()
+    System.exit 1
+}
+
+if (options.'verbose') {
+    verbose = true
+}
+
+if (options.'dry-run') {
+    dryrun = true
+}
+
+def repos = options.arguments ()
+
+if (! repos) {
+    do_normalize (Paths.get ('.'))
+}
+else {
+    for (def r : repos) {
+        do_normalize (Paths.get (r))
+    }
+}
+
+System.exit 0
 
 /**
  * Returns true when the file F is a conversion target
@@ -13,8 +58,8 @@ def files = [mercurial, "files"].execute ()
  * @return   true if F is target
  */
 @CompileStatic
-boolean is_target (String f) {
-    (f ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+)$/)
+boolean is_target (Path f) {
+    (f.fileName ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+)$/)
 }
 
 /**
@@ -69,22 +114,34 @@ ByteArrayOutputStream eliminate_CRLF (byte [] input) {
 def normalize_eol (Path path) {
     UUID uuid = UUID.randomUUID ()
     Path tmp = Paths.get path.parent.toString (), "cv-${uuid}.tmp"
-    //println "Write to ${tmp}"
+
+    // System.err.println "Write to ${tmp}"
+
     byte [] bytes = Files.readAllBytes path
     ByteArrayOutputStream out = eliminate_CRLF bytes
     if (bytes.length != out.size ()) {
-        println "bytes = ${bytes.length}"
-        println "     -> ${out.size ()}"
-        tmp.withOutputStream { o ->
-            out.writeTo o
+        if (verbose) {
+            System.err.println "bytes = ${bytes.length}"
+            System.err.println "     -> ${out.size ()}"
         }
-        Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
+        if (! dryrun) {
+            tmp.withOutputStream { o ->
+                out.writeTo o
+            }
+            Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
+        }
     }
 }
 
+@CompileStatic
+def do_normalize (Path repo) {
+    println "Dryrun = ${dryrun}"
+    Process files = ["hg.exe", "files"].execute ([], repo.toFile ())
 
-files.in.eachLine { l ->
-    if (is_target (l)) {
-        normalize_eol Paths.get (l)
+    files.in.eachLine { l ->
+        Path target = Paths.get (repo.toString (), l)
+        if (is_target (target)) {
+            normalize_eol target
+        }
     }
 }
