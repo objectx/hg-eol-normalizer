@@ -34,10 +34,9 @@ task collectJars(type: Copy) {
     from configurations.testRuntime
 }
 
-task uberjar(type: Jar) {
+task uberjar(type: Jar, dependsOn: [':assemble']) {
     from files (sourceSets.main.output.classesDir)
     from configurations.runtime.asFileTree.files.collect { zipTree (it) }
-
     manifest {
         attributes 'Main-Class': 'Main'
     }
