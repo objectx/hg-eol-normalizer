@@ -135,7 +135,7 @@ def normalize_eol (Path path) {
 
 @CompileStatic
 def do_normalize (Path repo) {
-    println "Dryrun = ${dryrun}"
+    //println "Dryrun = ${dryrun}"
     Process files = ["hg.exe", "files"].execute ([], repo.toFile ())
 
     files.in.eachLine { l ->
