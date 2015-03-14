@@ -1,7 +1,10 @@
 import groovy.transform.CompileStatic
 import groovy.transform.Field
+import groovy.util.logging.Slf4j
+
 import java.nio.file.*
 import java.util.UUID.*
+
 
 def build_option_parser () {
     def scriptname = (new File (getClass().protectionDomain.codeSource.location.file)).name
