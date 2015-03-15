@@ -2,6 +2,12 @@ import groovy.transform.CompileStatic
 import groovy.transform.Field
 import groovy.util.logging.Slf4j
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+
 import java.nio.file.*
 import java.util.UUID.*
 
@@ -28,6 +34,12 @@ if (! options) {
 if (options.'help') {
     cli.usage ()
     System.exit 1
+}
+
+if (options.'verbose') {
+    Logger rootLogger = LoggerFactory.getLogger org.slf4j.Logger.ROOT_LOGGER_NAME
+
+    rootLogger.level = Level.INFO
 }
 
 EOLNormalizer eol_normalizer = new EOLNormalizer (verbose: options.'verbose', dryrun: options.'dry-run')
@@ -57,7 +69,7 @@ class EOLNormalizer {
      */
     @CompileStatic
     boolean is_target (Path f) {
-        (f.fileName ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+)$/)
+        (f.fileName ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
     }
 
     /**
@@ -110,6 +122,7 @@ class EOLNormalizer {
      */
     @CompileStatic
     def normalize_eol (Path path) {
+        log.info "target: {}", path.toString ()
         UUID uuid = UUID.randomUUID ()
         Path tmp = Paths.get path.parent.toString (), "cv-${uuid}.tmp"
 
@@ -133,7 +146,15 @@ class EOLNormalizer {
 
     @CompileStatic
     def do_normalize (Path repo) {
-        Process files = ["hg.exe", "files"].execute ([], repo.toFile ())
+        Process files
+        if (Files.exists (repo.resolve ('.hg'))) {
+            log.info ".hg/ found"
+            files = ["hg", "files"].execute ([], repo.toFile ())
+        }
+        else if (Files.exists (repo.resolve ('.git'))) {
+            log.info ".git/ found"
+            files = ["git", "ls-files"].execute ([], repo.toFile ())
+        }
 
         files.in.eachLine { l ->
             Path target = Paths.get (repo.toString (), l)
