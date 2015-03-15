@@ -43,8 +43,11 @@ task collectJars(type: Copy) {
 }
 
 task uberjar(type: Jar, dependsOn: [':assemble']) {
+    classifier = 'deploy'
     from files (sourceSets.main.output.classesDir)
     from configurations.runtime.asFileTree.files.collect { zipTree (it) }
+    entryCompression = ZipEntryCompression.DEFLATED
+    zip64 = true
     manifest {
         attributes 'Main-Class': 'Main'
     }
