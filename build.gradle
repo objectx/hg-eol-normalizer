@@ -37,12 +37,7 @@ tasks.withType (GroovyCompile) {
     groovyOptions.optimizationOptions.indy = true
 }
 
-task collectJars(type: Copy) {
-    into "$buildDir/output/lib"
-    from configurations.testRuntime
-}
-
-task uberjar(type: Jar, dependsOn: [':assemble']) {
+task uberjar (type: Jar, dependsOn: [':assemble']) {
     classifier = 'deploy'
     from files (sourceSets.main.output.classesDir)
     from files (sourceSets.main.output.resourcesDir)
