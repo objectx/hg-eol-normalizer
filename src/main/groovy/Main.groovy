@@ -133,8 +133,6 @@ class EOLNormalizer {
 
     @CompileStatic
     def do_normalize (Path repo) {
-        log.info "dryrun = ${dryrun}"
-        //println "Dryrun = ${dryrun}"
         Process files = ["hg.exe", "files"].execute ([], repo.toFile ())
 
         files.in.eachLine { l ->
