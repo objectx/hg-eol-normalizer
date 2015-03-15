@@ -16,6 +16,8 @@ dependencies {
     // mandatory dependencies for using Spock
     compile "org.codehaus.groovy:groovy-all:2.4.1:indy"
     compile "commons-cli:commons-cli:1.2"
+    compile "org.slf4j:slf4j-api:1.7.10"
+    compile "ch.qos.logback:logback-classic:1.1.2"
 /*
     testCompile "org.spockframework:spock-core:1.0-groovy-2.4"
 
@@ -41,8 +43,11 @@ task collectJars(type: Copy) {
 }
 
 task uberjar(type: Jar, dependsOn: [':assemble']) {
+    classifier = 'deploy'
     from files (sourceSets.main.output.classesDir)
     from configurations.runtime.asFileTree.files.collect { zipTree (it) }
+    entryCompression = ZipEntryCompression.DEFLATED
+    zip64 = true
     manifest {
         attributes 'Main-Class': 'Main'
     }
