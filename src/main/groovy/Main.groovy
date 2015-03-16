@@ -1,3 +1,8 @@
+/* -*- mode: groovy, encoding: utf-8 -*-
+ *
+ * hg-eol-normalizer:
+ *
+ */
 import groovy.transform.CompileStatic
 import groovy.transform.Field
 import groovy.util.logging.Slf4j
@@ -124,21 +129,21 @@ class EOLNormalizer {
     def normalize_eol (Path path) {
         log.info "target: {}", path.toString ()
         UUID uuid = UUID.randomUUID ()
-        Path tmp = Paths.get path.parent.toString (), "cv-${uuid}.tmp"
-
-        // System.err.println "Write to ${tmp}"
+        Path tmp = path.parent.resolve "cv-${uuid}.tmp"
 
         byte [] bytes = Files.readAllBytes path
         ByteArrayOutputStream out = eliminate_CRLF bytes
         if (bytes.length != out.size ()) {
             if (verbose) {
-                System.err.println "bytes = ${bytes.length}"
-                System.err.println "     -> ${out.size ()}"
+                log.info "Input : {} bytes", bytes.length
+                log.info "Output: {} bytes", out.size ()
             }
             if (! dryrun) {
+                log.info "Write to: {}", tmp.toString ()
                 tmp.withOutputStream { o ->
                     out.writeTo o
                 }
+                log.info "Rename {} to {}", tmp.toString (), path.toString ()
                 Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
             }
         }
