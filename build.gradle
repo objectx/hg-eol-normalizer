@@ -49,3 +49,11 @@ task uberjar (type: Jar, dependsOn: [':assemble']) {
         attributes 'Main-Class': 'Main'
     }
 }
+
+task go (type: JavaExec, dependsOn: [':classes']) {
+    args = ['-N', '-v']
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'Main'
+}
+
+defaultTasks 'build'
