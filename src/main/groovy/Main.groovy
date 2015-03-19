@@ -129,7 +129,7 @@ class EOLNormalizer {
     def normalize_eol (Path path) {
         log.info "target: {}", path.toString ()
         UUID uuid = UUID.randomUUID ()
-        Path tmp = path.parent.resolve "cv-${uuid}.tmp"
+        Path tmp = path.toAbsolutePath ().parent.resolve "cv-${uuid}.tmp"
 
         byte [] bytes = Files.readAllBytes path
         ByteArrayOutputStream out = eliminate_CRLF bytes
