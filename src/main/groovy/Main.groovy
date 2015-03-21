@@ -15,7 +15,8 @@ import ch.qos.logback.classic.Logger
 
 import java.nio.file.*
 import java.util.UUID.*
-
+import java.util.regex.Pattern
+import java.util.regex.Matcher
 
 def build_option_parser () {
     def scriptname = (new File (getClass().protectionDomain.codeSource.location.file)).name
@@ -41,31 +42,62 @@ if (options.'help') {
     System.exit 1
 }
 
-if (options.'verbose') {
-    Logger rootLogger = LoggerFactory.getLogger org.slf4j.Logger.ROOT_LOGGER_NAME
+@Field Logger rootLogger = LoggerFactory.getLogger org.slf4j.Logger.ROOT_LOGGER_NAME
 
+if (options.'verbose') {
     rootLogger.level = Level.INFO
 }
 
-EOLNormalizer eol_normalizer = new EOLNormalizer (verbose: options.'verbose', dryrun: options.'dry-run')
+EOLNormalizer eol_normalizer = new EOLNormalizer (dryrun: options.'dry-run')
 
 def repos = options.arguments ()
 
-if (! repos) {
-    eol_normalizer.do_normalize (Paths.get ('.'))
-}
-else {
-    for (def r : repos) {
-        eol_normalizer.do_normalize (Paths.get (r))
+try {
+    if (! repos) {
+        eol_normalizer.normalize (Paths.get ('.'))
     }
+    else {
+        for (def r : repos) {
+            eol_normalizer.normalize (Paths.get (r))
+        }
+    }
+}
+catch (Exception e) {
+    rootLogger.error "Something wrong happen! ({})", e.message
+    System.exit 1
 }
 
 System.exit 0
 
 @Slf4j
 class EOLNormalizer {
-    boolean verbose = false
     boolean dryrun = false
+    static final Pattern rxTarget = Pattern.compile (/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
+
+    @CompileStatic
+    def normalize (Path repo) {
+        Process files
+
+        if (Files.exists (repo.resolve ('.hg'))) {
+            log.info ".hg/ found"
+            files = ["hg", "files"].execute ([], repo.toFile ())
+        }
+        else if (Files.exists (repo.resolve ('.git'))) {
+            log.info ".git/ found"
+            files = ["git", "ls-files"].execute ([], repo.toFile ())
+        }
+        else {
+            throw new IOException ("${repo} is neither git nor mercurial repository.")
+        }
+
+        files.in.eachLine { l ->
+            Path target = repo.resolve l
+            if (isTarget (target)) {
+                normalizeEOL target
+            }
+        }
+    }
+
     /**
      * Returns true when the file F is a conversion target
      *
@@ -73,8 +105,46 @@ class EOLNormalizer {
      * @return   true if F is target
      */
     @CompileStatic
-    boolean is_target (Path f) {
-        (f.fileName ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
+    static final boolean isTarget (Path f) {
+        Matcher m = rxTarget.matcher f.fileName.toString ()
+        m.matches ()
+    }
+
+    /**
+     * Normalizes EOL (to unix one)
+     *
+     * @param  path file to check
+     */
+    @CompileStatic
+    def normalizeEOL (Path path) {
+        log.info "target: {}", path.toString ()
+        UUID uuid = UUID.randomUUID ()
+        Path tmp
+
+        if (path.parent) {
+            tmp = path.parent.resolve "cv-${uuid}.tmp"
+        }
+        else {
+            tmp = Paths.get "cv-${uuid}.tmp"
+        }
+
+        byte [] bytes = Files.readAllBytes path
+        ByteArrayOutputStream out = eliminateCRLF bytes
+        // This code assumes that eliminate_CRLF always shorten the size (if conversions occur)
+        if (bytes.length == out.size ()) {
+            log.info "No conversions occur"
+        }
+        else {
+            log.info "Conversion occur ({} bytes -> {} bytes)", bytes.length, out.size ()
+            if (! dryrun) {
+                log.info "Write to: {}", tmp.toString ()
+                tmp.withOutputStream { o ->
+                    out.writeTo o
+                }
+                log.info "Rename {} to {}", tmp.toString (), path.toString ()
+                Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
+            }
+        }
     }
 
     /**
@@ -86,7 +156,7 @@ class EOLNormalizer {
      * Note: We can't use File.eachLine method in this case (eachLine is encoding sensitive)
      */
     @CompileStatic
-    ByteArrayOutputStream eliminate_CRLF (byte [] input) {
+    static final ByteArrayOutputStream eliminateCRLF (byte [] input) {
         ByteArrayOutputStream output = new ByteArrayOutputStream ()
         int head = 0 ;
         int tail = 0 ;
@@ -119,53 +189,6 @@ class EOLNormalizer {
         }
         output
     }
-
-    /**
-     * Normalizes EOL (to unix one)
-     *
-     * @param  path file to check
-     */
-    @CompileStatic
-    def normalize_eol (Path path) {
-        log.info "target: {}", path.toString ()
-        UUID uuid = UUID.randomUUID ()
-        Path tmp = path.toAbsolutePath ().parent.resolve "cv-${uuid}.tmp"
-
-        byte [] bytes = Files.readAllBytes path
-        ByteArrayOutputStream out = eliminate_CRLF bytes
-        if (bytes.length != out.size ()) {
-            if (verbose) {
-                log.info "Input : {} bytes", bytes.length
-                log.info "Output: {} bytes", out.size ()
-            }
-            if (! dryrun) {
-                log.info "Write to: {}", tmp.toString ()
-                tmp.withOutputStream { o ->
-                    out.writeTo o
-                }
-                log.info "Rename {} to {}", tmp.toString (), path.toString ()
-                Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
-            }
-        }
-    }
-
-    @CompileStatic
-    def do_normalize (Path repo) {
-        Process files
-        if (Files.exists (repo.resolve ('.hg'))) {
-            log.info ".hg/ found"
-            files = ["hg", "files"].execute ([], repo.toFile ())
-        }
-        else if (Files.exists (repo.resolve ('.git'))) {
-            log.info ".git/ found"
-            files = ["git", "ls-files"].execute ([], repo.toFile ())
-        }
-
-        files.in.eachLine { l ->
-            Path target = Paths.get (repo.toString (), l)
-            if (is_target (target)) {
-                normalize_eol target
-            }
-        }
-    }
 }
+
+/* [END OF FILE] */
