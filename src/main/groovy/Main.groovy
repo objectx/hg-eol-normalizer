@@ -73,6 +73,31 @@ System.exit 0
 class EOLNormalizer {
     boolean dryrun = false
     static final Pattern rxTarget = Pattern.compile (/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
+
+    @CompileStatic
+    def normalize (Path repo) {
+        Process files
+
+        if (Files.exists (repo.resolve ('.hg'))) {
+            log.info ".hg/ found"
+            files = ["hg", "files"].execute ([], repo.toFile ())
+        }
+        else if (Files.exists (repo.resolve ('.git'))) {
+            log.info ".git/ found"
+            files = ["git", "ls-files"].execute ([], repo.toFile ())
+        }
+        else {
+            throw new IOException ("${repo} is neither git nor mercurial repository.")
+        }
+
+        files.in.eachLine { l ->
+            Path target = repo.resolve l
+            if (isTarget (target)) {
+                normalizeEOL target
+            }
+        }
+    }
+
     /**
      * Returns true when the file F is a conversion target
      *
@@ -83,6 +108,43 @@ class EOLNormalizer {
     static final boolean isTarget (Path f) {
         Matcher m = rxTarget.matcher f.fileName.toString ()
         m.matches ()
+    }
+
+    /**
+     * Normalizes EOL (to unix one)
+     *
+     * @param  path file to check
+     */
+    @CompileStatic
+    def normalizeEOL (Path path) {
+        log.info "target: {}", path.toString ()
+        UUID uuid = UUID.randomUUID ()
+        Path tmp
+
+        if (path.parent) {
+            tmp = path.parent.resolve "cv-${uuid}.tmp"
+        }
+        else {
+            tmp = Paths.get "cv-${uuid}.tmp"
+        }
+
+        byte [] bytes = Files.readAllBytes path
+        ByteArrayOutputStream out = eliminateCRLF bytes
+        // This code assumes that eliminate_CRLF always shorten the size (if conversions occur)
+        if (bytes.length == out.size ()) {
+            log.info "No conversions occur"
+        }
+        else {
+            log.info "Conversion occur ({} bytes -> {} bytes)", bytes.length, out.size ()
+            if (! dryrun) {
+                log.info "Write to: {}", tmp.toString ()
+                tmp.withOutputStream { o ->
+                    out.writeTo o
+                }
+                log.info "Rename {} to {}", tmp.toString (), path.toString ()
+                Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
+            }
+        }
     }
 
     /**
@@ -127,62 +189,6 @@ class EOLNormalizer {
         }
         output
     }
-
-    /**
-     * Normalizes EOL (to unix one)
-     *
-     * @param  path file to check
-     */
-    @CompileStatic
-    def normalizeEOL (Path path) {
-        log.info "target: {}", path.toString ()
-        UUID uuid = UUID.randomUUID ()
-        Path tmp
-
-        if (path.parent) {
-            tmp = path.parent.resolve "cv-${uuid}.tmp"
-        }
-        else {
-            tmp = Paths.get "cv-${uuid}.tmp"
-        }
-
-        byte [] bytes = Files.readAllBytes path
-        ByteArrayOutputStream out = eliminateCRLF bytes
-        // This code assumes that eliminate_CRLF always shorten the size (if conversions occur)
-        if (bytes.length != out.size ()) {
-            log.info "Conversion occur ({} bytes -> {} bytes)", bytes.length, out.size ()
-            if (! dryrun) {
-                log.info "Write to: {}", tmp.toString ()
-                tmp.withOutputStream { o ->
-                    out.writeTo o
-                }
-                log.info "Rename {} to {}", tmp.toString (), path.toString ()
-                Files.move tmp, path, StandardCopyOption.REPLACE_EXISTING
-            }
-        }
-    }
-
-    @CompileStatic
-    def normalize (Path repo) {
-        Process files
-
-        if (Files.exists (repo.resolve ('.hg'))) {
-            log.info ".hg/ found"
-            files = ["hg", "files"].execute ([], repo.toFile ())
-        }
-        else if (Files.exists (repo.resolve ('.git'))) {
-            log.info ".git/ found"
-            files = ["git", "ls-files"].execute ([], repo.toFile ())
-        }
-        else {
-            throw new IOException ("${repo} is neither git nor mercurial repository.")
-        }
-
-        files.in.eachLine { l ->
-            Path target = repo.resolve l
-            if (isTarget (target)) {
-                normalizeEOL target
-            }
-        }
-    }
 }
+
+/* [END OF FILE] */
