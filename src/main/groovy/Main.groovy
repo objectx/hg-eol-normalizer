@@ -15,7 +15,8 @@ import ch.qos.logback.classic.Logger
 
 import java.nio.file.*
 import java.util.UUID.*
-
+import java.util.regex.Pattern
+import java.util.regex.Matcher
 
 def build_option_parser () {
     def scriptname = (new File (getClass().protectionDomain.codeSource.location.file)).name
@@ -47,7 +48,7 @@ if (options.'verbose') {
     rootLogger.level = Level.INFO
 }
 
-EOLNormalizer eol_normalizer = new EOLNormalizer (verbose: options.'verbose', dryrun: options.'dry-run')
+EOLNormalizer eol_normalizer = new EOLNormalizer (dryrun: options.'dry-run')
 
 def repos = options.arguments ()
 
@@ -64,8 +65,8 @@ System.exit 0
 
 @Slf4j
 class EOLNormalizer {
-    boolean verbose = false
     boolean dryrun = false
+    static final Pattern rxTarget = Pattern.compile (/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
     /**
      * Returns true when the file F is a conversion target
      *
@@ -73,8 +74,9 @@ class EOLNormalizer {
      * @return   true if F is target
      */
     @CompileStatic
-    boolean is_target (Path f) {
-        (f.fileName ==~ ~/.+\.(?:h|hh|hpp|hxx|h\+\+|c|cc|cpp|cxx|c\+\+|py|pl|java|groovy)$/)
+    static final boolean isTarget (Path f) {
+        Matcher m = rxTarget.matcher f.fileName.toString ()
+        m.matches ()
     }
 
     /**
@@ -86,7 +88,7 @@ class EOLNormalizer {
      * Note: We can't use File.eachLine method in this case (eachLine is encoding sensitive)
      */
     @CompileStatic
-    ByteArrayOutputStream eliminate_CRLF (byte [] input) {
+    static final ByteArrayOutputStream eliminateCRLF (byte [] input) {
         ByteArrayOutputStream output = new ByteArrayOutputStream ()
         int head = 0 ;
         int tail = 0 ;
@@ -132,12 +134,11 @@ class EOLNormalizer {
         Path tmp = path.toAbsolutePath ().parent.resolve "cv-${uuid}.tmp"
 
         byte [] bytes = Files.readAllBytes path
-        ByteArrayOutputStream out = eliminate_CRLF bytes
+        ByteArrayOutputStream out = eliminateCRLF bytes
+        // This code assumes that eliminate_CRLF always shorten the size (if conversions occur)
         if (bytes.length != out.size ()) {
-            if (verbose) {
-                log.info "Input : {} bytes", bytes.length
-                log.info "Output: {} bytes", out.size ()
-            }
+            log.info "Input : {} bytes", bytes.length
+            log.info "Output: {} bytes", out.size ()
             if (! dryrun) {
                 log.info "Write to: {}", tmp.toString ()
                 tmp.withOutputStream { o ->
@@ -162,8 +163,8 @@ class EOLNormalizer {
         }
 
         files.in.eachLine { l ->
-            Path target = Paths.get (repo.toString (), l)
-            if (is_target (target)) {
+            Path target = repo.resolve l
+            if (isTarget (target)) {
                 normalize_eol target
             }
         }
