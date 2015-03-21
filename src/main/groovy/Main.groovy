@@ -42,9 +42,9 @@ if (options.'help') {
     System.exit 1
 }
 
-if (options.'verbose') {
-    Logger rootLogger = LoggerFactory.getLogger org.slf4j.Logger.ROOT_LOGGER_NAME
+@Field Logger rootLogger = LoggerFactory.getLogger org.slf4j.Logger.ROOT_LOGGER_NAME
 
+if (options.'verbose') {
     rootLogger.level = Level.INFO
 }
 
@@ -52,13 +52,19 @@ EOLNormalizer eol_normalizer = new EOLNormalizer (dryrun: options.'dry-run')
 
 def repos = options.arguments ()
 
-if (! repos) {
-    eol_normalizer.do_normalize (Paths.get ('.'))
-}
-else {
-    for (def r : repos) {
-        eol_normalizer.do_normalize (Paths.get (r))
+try {
+    if (! repos) {
+        eol_normalizer.normalize (Paths.get ('.'))
     }
+    else {
+        for (def r : repos) {
+            eol_normalizer.normalize (Paths.get (r))
+        }
+    }
+}
+catch (Exception e) {
+    rootLogger.error "Something wrong happen! ({})", e.message
+    System.exit 1
 }
 
 System.exit 0
@@ -128,17 +134,23 @@ class EOLNormalizer {
      * @param  path file to check
      */
     @CompileStatic
-    def normalize_eol (Path path) {
+    def normalizeEOL (Path path) {
         log.info "target: {}", path.toString ()
         UUID uuid = UUID.randomUUID ()
-        Path tmp = path.toAbsolutePath ().parent.resolve "cv-${uuid}.tmp"
+        Path tmp
+
+        if (path.parent) {
+            tmp = path.parent.resolve "cv-${uuid}.tmp"
+        }
+        else {
+            tmp = Paths.get "cv-${uuid}.tmp"
+        }
 
         byte [] bytes = Files.readAllBytes path
         ByteArrayOutputStream out = eliminateCRLF bytes
         // This code assumes that eliminate_CRLF always shorten the size (if conversions occur)
         if (bytes.length != out.size ()) {
-            log.info "Input : {} bytes", bytes.length
-            log.info "Output: {} bytes", out.size ()
+            log.info "Conversion occur ({} bytes -> {} bytes)", bytes.length, out.size ()
             if (! dryrun) {
                 log.info "Write to: {}", tmp.toString ()
                 tmp.withOutputStream { o ->
@@ -151,8 +163,9 @@ class EOLNormalizer {
     }
 
     @CompileStatic
-    def do_normalize (Path repo) {
+    def normalize (Path repo) {
         Process files
+
         if (Files.exists (repo.resolve ('.hg'))) {
             log.info ".hg/ found"
             files = ["hg", "files"].execute ([], repo.toFile ())
@@ -161,11 +174,14 @@ class EOLNormalizer {
             log.info ".git/ found"
             files = ["git", "ls-files"].execute ([], repo.toFile ())
         }
+        else {
+            throw new IOException ("${repo} is neither git nor mercurial repository.")
+        }
 
         files.in.eachLine { l ->
             Path target = repo.resolve l
             if (isTarget (target)) {
-                normalize_eol target
+                normalizeEOL target
             }
         }
     }
