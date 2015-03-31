@@ -163,7 +163,7 @@ class EOLNormalizer {
         while (tail < input.length) {
             int ch = input [tail]
             if (ch == 0x0d) {
-                if ((tail + 1) < input.length && input [tail + 1] == 0x0a) {
+                if ((tail + 1) < input.length && input [tail + 1] == (byte)0x0a) {
                     // \r\n found
                     output.write input, head, (tail - head)
                     output.write 0x0a
