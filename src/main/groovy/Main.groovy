@@ -189,6 +189,31 @@ class EOLNormalizer {
         }
         output
     }
+
+    @CompileStatic
+    static final int nextTabStop (int col, int tabWidth) {
+        Math.floorDiv (col + tabWidth, tabWidth) * tabWidth
+    }
+
+    @CompileStatic
+    static final def expandTabs (ByteArrayOutputStream output, byte [] input, int head, int tail, int tabstop) {
+        int col = 0
+        while (head < tail) {
+            int ch = input [head++]
+            if (ch != 0x09) {
+                output.write ch
+                ++col
+            }
+            else {
+                // TAB found
+                int nexttab = nextTabStop col, tabstop
+                while (col < nexttab) {
+                    output.write 0x20
+                    ++col
+                }
+            }
+        }
+    }
 }
 
 /* [END OF FILE] */
